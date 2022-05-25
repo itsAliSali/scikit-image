@@ -16,6 +16,29 @@ def draw_centers(img, segments, color):
     return img
 
 
+def weighted_average(segments, interest_point, alpha=0.1, m=2):
+    """ move centers towards interest point. 
+    movement is wrt alpha and the (1/ distance between
+    segment[i] and interest_point)**m
+    """
+    
+    x, y = interest_point
+    point = np.array([0, y, x, 0,0,0], dtype=np.float64)
+    
+    dst = np.array([[0]], dtype=np.float64)
+    for c in segments:
+        temp = np.array([(np.sum((c-point)**2))**0.5])
+        dst = np.vstack((dst, temp))
+    dst = dst[1:, :]
+    dst = dst/np.max(dst)
+    dst = 1-dst # the points which are near interest_point 
+                # will move more toeards it
+    
+    segments = alpha*point*dst**m + (1-alpha*dst**m)*segments
+    
+    return segments
+
+
 def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
          sigma=0, spacing=None, multichannel=True, convert2lab=None,
          enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3,
@@ -80,9 +103,14 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
 
     # Draw initial segments center
     img_center = draw_centers(org_img, segments, (100, 250, 50))
+    cv2.imshow("org center", img_center)
+    
+    # change segments by using weighted average wrt its center
+    segments = weighted_average(segments, (image.shape[2]/2, image.shape[1]/2), 0.5, 2)
+    img_center = draw_centers(org_img, segments, (100, 50, 250))
     cv2.imshow("my center", img_center)
     cv2.waitKey(0)
-    
+
     # we do the scaling of ratio in the same way as in the SLIC paper
     # so the values have the same meaning
     step = float(max((step_z, step_y, step_x)))
@@ -91,7 +119,7 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
     image = np.ascontiguousarray(image * ratio)
 
     labels = _slic_cython(image, segments, step, max_iter, spacing, slic_zero)
-
+    
     if enforce_connectivity:
         segment_size = depth * height * width / n_segments
         min_size = int(min_size_factor * segment_size)
@@ -102,5 +130,5 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
 
     if is_2d:
         labels = labels[0]
-
+    
     return labels
