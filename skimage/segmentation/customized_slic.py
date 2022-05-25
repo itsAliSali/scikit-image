@@ -7,7 +7,7 @@ from ..util import img_as_float, regular_grid
 from ..segmentation._slic import (_slic_cython,
                                   _enforce_label_connectivity_cython)
 from ..color import rgb2lab
-
+from .boundaries import mark_boundaries
 
 def draw_centers(img, segments, color):
     img = img.copy()
@@ -38,6 +38,22 @@ def weighted_average(segments, interest_point, alpha=0.1, m=2):
     segments = alpha*point*dst**m + (1-alpha*dst**m)*segments
     
     return segments
+
+num_points = 0 
+mouse_pos = (0, 0)
+
+def click_and_crop(event, x, y, flags, param):
+    global mouse_pos
+    global num_points
+    
+    if event == cv2.EVENT_LBUTTONDOWN:
+        mouse_pos = (x, y)
+        num_points += 1
+        
+        print(num_points, mouse_pos)
+
+    # elif event == cv2.EVENT_LBUTTONUP:
+        # print(mouse_pos)
 
 
 def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
@@ -103,33 +119,77 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
     segments = np.ascontiguousarray(segments)
 
     # Draw initial segments center
-    img_center = draw_centers(org_img, segments, (100, 250, 50))
-    cv2.imshow("org center", img_center)
+    # img_center = draw_centers(org_img, segments, (100, 250, 50))
+    # cv2.imshow("org center", img_center)
     
     # change segments by using weighted average wrt its center
-    segments = weighted_average(segments, (image.shape[2]/2, image.shape[1]/2), 0.5, 2)
-    img_center = draw_centers(img_center, segments, (100, 50, 250))
-    cv2.imshow("my center", img_center)
-    cv2.waitKey(0)
+    # segments = weighted_average(segments, (320, 230), 0.3, 2)
+    # segments = weighted_average(segments, (320, 230), 0.5, 4)
+    # img_center = draw_centers(img_center, segments, (100, 50, 250))
+    # cv2.imshow("my center", img_center)
+    # cv2.waitKey(0)
 
-    # we do the scaling of ratio in the same way as in the SLIC paper
-    # so the values have the same meaning
-    step = float(max((step_z, step_y, step_x)))
-    ratio = 1.0 / compactness
+    cv2.namedWindow("initial centers")
+    cv2.setMouseCallback("initial centers", click_and_crop)
 
-    image = np.ascontiguousarray(image * ratio)
+    perform_slic = True
 
-    labels = _slic_cython(image, segments, step, max_iter, spacing, slic_zero)
+    while True:
+        
+        img_center = draw_centers(org_img, segments, (100, 50, 250))
+        cv2.imshow("initial centers", img_center)
+        
+        # we do the scaling of ratio in the same way as in the SLIC paper
+        # so the values have the same meaning
+        step = float(max((step_z, step_y, step_x))) 
+        ratio = 1.0 / compactness
+        image_r = np.ascontiguousarray(image * ratio)
+
+        if perform_slic:
+            perform_slic = False
+            labels = _slic_cython(image_r, segments.copy(), step, max_iter, spacing.copy(), slic_zero)
+            if enforce_connectivity:
+                segment_size = depth * height * width / n_segments
+                min_size = int(min_size_factor * segment_size)
+                max_size = int(max_size_factor * segment_size)
+                labels = _enforce_label_connectivity_cython(labels,
+                                                            min_size,
+                                                            max_size)
+            if is_2d:
+                labels = labels[0]
+        cv2.imshow('labels', np.uint8(labels/np.max(labels)*255))
+        B = mark_boundaries(org_img.copy(), labels.copy())
+        cv2.imshow('bounbaries', B)
+        
+        
+        key = cv2.waitKey(5) & 0xFF
+        
+        if key == ord("q"):
+            break
+        elif key == ord("i"):
+            perform_slic = True
+            segments = weighted_average(segments, mouse_pos, 0.4, 4)
+        elif key == ord("x"):
+            compactness +=5
+            perform_slic = True
+            print("compactness: ", compactness)
+        elif key == ord("c"):
+            if compactness >5:
+                perform_slic = True
+                compactness -=5
+                print("compactness: ", compactness)
+        elif key == ord("e"):
+            perform_slic = True
+            enforce_connectivity = not enforce_connectivity
+        elif key == ord("v"):
+            min_size_factor += 0.1
+            perform_slic = True
+            print("min_size_factor: ", min_size_factor)
+        elif key == ord("b"):
+            if min_size_factor >= 0.1:
+                perform_slic = True
+                min_size_factor -= 0.1
+                print("min_size_factor: ", min_size_factor)
     
-    if enforce_connectivity:
-        segment_size = depth * height * width / n_segments
-        min_size = int(min_size_factor * segment_size)
-        max_size = int(max_size_factor * segment_size)
-        labels = _enforce_label_connectivity_cython(labels,
-                                                    min_size,
-                                                    max_size)
-
-    if is_2d:
-        labels = labels[0]
     
     return labels
