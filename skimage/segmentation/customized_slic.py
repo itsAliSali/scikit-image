@@ -1,6 +1,7 @@
 import collections as coll
 import numpy as np
 from scipy import ndimage as ndi
+import cv2
 
 from ..util import img_as_float, regular_grid
 from ..segmentation._slic import (_slic_cython,
@@ -8,14 +9,21 @@ from ..segmentation._slic import (_slic_cython,
 from ..color import rgb2lab
 
 
-def slic(image, n_segments=100, compactness=10., max_iter=10, sigma=0,
-         spacing=None, multichannel=True, convert2lab=None,
+def draw_centers(img, segments, color):
+    for c in segments:
+        center_coordinates = (int(c[2]), int(c[1]))
+        img = cv2.circle(img, center_coordinates, 1, color, 2)
+    return img
+
+
+def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
+         sigma=0, spacing=None, multichannel=True, convert2lab=None,
          enforce_connectivity=True, min_size_factor=0.5, max_size_factor=3,
          slic_zero=False):
     """Segments image using k-means clustering in Color-(x,y,z) space.
-    
     """
 
+    org_img = image.copy()
     image = img_as_float(image)
     is_2d = False
     if image.ndim == 2:
@@ -70,6 +78,11 @@ def slic(image, n_segments=100, compactness=10., max_iter=10, sigma=0,
                               axis=-1).reshape(-1, 3 + image.shape[3])
     segments = np.ascontiguousarray(segments)
 
+    # Draw initial segments center
+    img_center = draw_centers(org_img, segments, (100, 250, 50))
+    cv2.imshow("my center", img_center)
+    cv2.waitKey(0)
+    
     # we do the scaling of ratio in the same way as in the SLIC paper
     # so the values have the same meaning
     step = float(max((step_z, step_y, step_x)))
