@@ -10,9 +10,10 @@ from ..color import rgb2lab
 
 
 def draw_centers(img, segments, color):
+    img = img.copy()
     for c in segments:
         center_coordinates = (int(c[2]), int(c[1]))
-        img = cv2.circle(img, center_coordinates, 1, color, 2)
+        cv2.circle(img, center_coordinates, 1, color, 2)
     return img
 
 
@@ -107,7 +108,7 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
     
     # change segments by using weighted average wrt its center
     segments = weighted_average(segments, (image.shape[2]/2, image.shape[1]/2), 0.5, 2)
-    img_center = draw_centers(org_img, segments, (100, 50, 250))
+    img_center = draw_centers(img_center, segments, (100, 50, 250))
     cv2.imshow("my center", img_center)
     cv2.waitKey(0)
 
