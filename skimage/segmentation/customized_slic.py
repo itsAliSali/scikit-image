@@ -41,20 +41,39 @@ def weighted_average(segments, interest_point, alpha=0.1, m=2):
 
 num_points = 0 
 mouse_pos = (0, 0)
+segments =np.array([])
+mode = 'nothing'
 
 def click_and_crop(event, x, y, flags, param):
     global mouse_pos
     global num_points
-    
+    global segments
+    global mode 
+
+    point = np.array([0, y, x, 0,0,0], dtype=np.float64)
+
     if event == cv2.EVENT_LBUTTONDOWN:
+        err = np.sum((segments-point)**2, axis=1, keepdims=True)
+        mask = err < 10
+        mask = np.repeat(mask, 6, axis=1)
+        if np.sum(mask) != 0:
+            clicked_point = segments[mask]
+            clicked_ind = np.where(mask == True)[0][0]
+            print(clicked_point, clicked_ind)
+            print('seg', segments.shape)
+            if mode == 'delete':
+                segments = np.vstack((segments[:clicked_ind], segments[clicked_ind+1:]))
+                print('new seg', segments.shape)
+        
+        if mode == 'add':
+            segments = np.vstack((segments, point))
+            print('new seg', segments.shape)
+            
+
+    elif event == cv2.EVENT_LBUTTONUP:
         mouse_pos = (x, y)
         num_points += 1
-        
         print(num_points, mouse_pos)
-
-    # elif event == cv2.EVENT_LBUTTONUP:
-        # print(mouse_pos)
-
 
 def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
          sigma=0, spacing=None, multichannel=True, convert2lab=None,
@@ -62,7 +81,7 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
          slic_zero=False):
     """Segments image using k-means clustering in Color-(x,y,z) space.
     """
-
+    global segments, mode
     org_img = image.copy()
     image = img_as_float(image)
     is_2d = False
@@ -157,8 +176,10 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
                                                             max_size)
             if is_2d:
                 labels = labels[0]
+            labels = cv2.medianBlur(np.uint8(labels), 5)
+        
         cv2.imshow('labels', np.uint8(labels/np.max(labels)*255))
-        B = mark_boundaries(org_img.copy(), labels.copy())
+        B = mark_boundaries(org_img, labels)
         cv2.imshow('bounbaries', B)
         
         
@@ -190,6 +211,9 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
                 perform_slic = True
                 min_size_factor -= 0.1
                 print("min_size_factor: ", min_size_factor)
-    
+        elif key == ord("d"):
+            mode = 'delete'
+        elif key == ord("a"):
+            mode = 'add'
     
     return labels
