@@ -180,10 +180,11 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
           
             if is_2d:
                 labels = labels[0]
+            labels = cv2.medianBlur(np.uint16(labels), 5)
             print('number of patches:', len(np.unique(labels)))
-            labels = cv2.medianBlur(np.uint8(labels), 5)
+            
         
-        cv2.imshow('labels', np.uint8(labels/np.max(labels)*255))
+        cv2.imshow('labels', np.uint8(labels))
         B = mark_boundaries(org_img, labels)
         cv2.imshow('bounbaries', B)
 
