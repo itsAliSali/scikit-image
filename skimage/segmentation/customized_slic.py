@@ -39,43 +39,45 @@ def weighted_average(segments, interest_point, alpha=0.1, m=2):
     
     return segments
 
-num_points = 0 
-mouse_pos = (0, 0)
 segments =np.array([])
 mode = 'nothing'
+perform_slic = True
 
 def click_and_crop(event, x, y, flags, param):
-    global mouse_pos
-    global num_points
-    global segments
-    global mode 
+    global segments, mode, perform_slic 
 
     point = np.array([0, y, x, 0,0,0], dtype=np.float64)
 
     if event == cv2.EVENT_LBUTTONDOWN:
+        approximity_tresh = 15
         err = np.sum((segments-point)**2, axis=1, keepdims=True)
-        mask = err < 10
+        mask = err < approximity_tresh
         mask = np.repeat(mask, 6, axis=1)
         touched_a_point = np.sum(mask) != 0
         if touched_a_point:
-            clicked_point = segments[mask]
+            # clicked_point = segments[mask]
             clicked_ind = np.where(mask == True)[0][0]
-            print(clicked_point, clicked_ind)
-            print('seg', segments.shape)
+            # print(clicked_point, clicked_ind)
+            # print('seg', segments.shape)
             if mode == 'delete' or mode == 'move':
                 segments = np.vstack((segments[:clicked_ind], segments[clicked_ind+1:]))
-                print('new seg1', segments.shape)
-        
+                # print('new seg1', segments.shape)
+                perform_slic = True
+
         if mode == 'add':
             segments = np.vstack((segments, point))
-            print('new seg2', segments.shape)
-            
+            # print('new seg2', segments.shape)
+            perform_slic = True
 
     elif event == cv2.EVENT_LBUTTONUP:
         if mode == 'move':
-                segments = np.vstack((segments, point))
-                print('new seg3', segments.shape)
-        
+            segments = np.vstack((segments, point))
+            # print('new seg3', segments.shape)
+            perform_slic = True
+        elif mode == 'focus':
+            segments = weighted_average(segments, (x, y), 0.3, 4)
+            perform_slic = True
+            
 
 def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
          sigma=0, spacing=None, multichannel=True, convert2lab=None,
@@ -152,8 +154,9 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
 
     cv2.namedWindow("initial centers")
     cv2.setMouseCallback("initial centers", click_and_crop)
-
-    perform_slic = True
+    step = float(max((step_z, step_y, step_x)))
+        
+    global perform_slic
 
     while True:
         
@@ -162,36 +165,35 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
         
         # we do the scaling of ratio in the same way as in the SLIC paper
         # so the values have the same meaning
-        step = float(max((step_z, step_y, step_x))) 
+        # step = float(max((step_z, step_y, step_x))) *2
         ratio = 1.0 / compactness
         image_r = np.ascontiguousarray(image * ratio)
 
         if perform_slic:
             perform_slic = False
-            labels = _slic_cython(image_r, segments.copy(), step, max_iter, spacing.copy(), slic_zero)
+            labels = _slic_cython(image_r, segments.copy(), step, max_iter+10, spacing.copy(), slic_zero)
             if enforce_connectivity:
                 segment_size = depth * height * width / n_segments
                 min_size = int(min_size_factor * segment_size)
                 max_size = int(max_size_factor * segment_size)
-                labels = _enforce_label_connectivity_cython(labels,
-                                                            min_size,
-                                                            max_size)
+                labels = _enforce_label_connectivity_cython(labels, min_size, max_size)
+          
             if is_2d:
                 labels = labels[0]
+            print('number of patches:', len(np.unique(labels)))
             labels = cv2.medianBlur(np.uint8(labels), 5)
         
         cv2.imshow('labels', np.uint8(labels/np.max(labels)*255))
         B = mark_boundaries(org_img, labels)
         cv2.imshow('bounbaries', B)
+
+        # img_B_center = draw_centers(np.uint8(B*255), segments, (100, 50, 250))
+        # cv2.imshow("seg+B", img_B_center)
         
-        
-        key = cv2.waitKey(5) & 0xFF
+        key = cv2.waitKey(1) & 0xFF
         
         if key == ord("q"):
             break
-        elif key == ord("i"):
-            perform_slic = True
-            segments = weighted_average(segments, mouse_pos, 0.4, 4)
         elif key == ord("x"):
             compactness +=5
             perform_slic = True
@@ -204,14 +206,15 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
         elif key == ord("e"):
             perform_slic = True
             enforce_connectivity = not enforce_connectivity
+            print("enforce_connectivity: ", enforce_connectivity)
         elif key == ord("v"):
-            min_size_factor += 0.1
             perform_slic = True
+            min_size_factor += 0.025
             print("min_size_factor: ", min_size_factor)
         elif key == ord("b"):
-            if min_size_factor >= 0.1:
+            if min_size_factor >= 0.025:
                 perform_slic = True
-                min_size_factor -= 0.1
+                min_size_factor -= 0.025
                 print("min_size_factor: ", min_size_factor)
         elif key == ord("d"):
             mode = 'delete'
@@ -219,5 +222,16 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
             mode = 'add'
         elif key == ord("m"):
             mode = 'move'
-    
+        elif key == ord("f"):
+            mode = 'focus'
+        elif key == ord("g"):
+            step +=5
+            perform_slic = True
+            print("step: ", step)
+        elif key == ord("h"):
+            if step >5:
+                perform_slic = True
+                step -=5
+                print("step: ", step)
+
     return labels
