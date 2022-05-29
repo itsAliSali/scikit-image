@@ -56,24 +56,26 @@ def click_and_crop(event, x, y, flags, param):
         err = np.sum((segments-point)**2, axis=1, keepdims=True)
         mask = err < 10
         mask = np.repeat(mask, 6, axis=1)
-        if np.sum(mask) != 0:
+        touched_a_point = np.sum(mask) != 0
+        if touched_a_point:
             clicked_point = segments[mask]
             clicked_ind = np.where(mask == True)[0][0]
             print(clicked_point, clicked_ind)
             print('seg', segments.shape)
-            if mode == 'delete':
+            if mode == 'delete' or mode == 'move':
                 segments = np.vstack((segments[:clicked_ind], segments[clicked_ind+1:]))
-                print('new seg', segments.shape)
+                print('new seg1', segments.shape)
         
         if mode == 'add':
             segments = np.vstack((segments, point))
-            print('new seg', segments.shape)
+            print('new seg2', segments.shape)
             
 
     elif event == cv2.EVENT_LBUTTONUP:
-        mouse_pos = (x, y)
-        num_points += 1
-        print(num_points, mouse_pos)
+        if mode == 'move':
+                segments = np.vstack((segments, point))
+                print('new seg3', segments.shape)
+        
 
 def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
          sigma=0, spacing=None, multichannel=True, convert2lab=None,
@@ -215,5 +217,7 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
             mode = 'delete'
         elif key == ord("a"):
             mode = 'add'
+        elif key == ord("m"):
+            mode = 'move'
     
     return labels
