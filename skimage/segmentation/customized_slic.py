@@ -171,7 +171,7 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
 
         if perform_slic:
             perform_slic = False
-            labels = _slic_cython(image_r, segments.copy(), step, max_iter+10, spacing.copy(), slic_zero)
+            labels = _slic_cython(image_r, segments.copy(), step, max_iter, spacing.copy(), slic_zero)
             if enforce_connectivity:
                 segment_size = depth * height * width / n_segments
                 min_size = int(min_size_factor * segment_size)
@@ -234,5 +234,14 @@ def slic_customized(image, n_segments=100, compactness=10., max_iter=10,
                 perform_slic = True
                 step -=5
                 print("step: ", step)
+        elif key == ord("j"):
+            max_iter +=2
+            perform_slic = True
+            print("max_iter: ", max_iter)
+        elif key == ord("k"):
+            if max_iter >2:
+                perform_slic = True
+                max_iter -=2
+                print("max_iter: ", max_iter)
 
     return labels
